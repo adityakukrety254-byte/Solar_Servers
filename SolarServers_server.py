@@ -43,6 +43,9 @@ async def websocket_stream(ws: WebSocket):
     except Exception as e:
         print("Error:", e)
 
+@app.get("/debug")
+def debug():
+    return core.get_packet()
 
 @app.post("/kill")
 def kill_process(pid: int = Body(..., embed = True)):
