@@ -10,3 +10,6 @@ How to test:
 5. DO NOT directly open index.html.
 
 > On top left, a small green square will appear. It is the placeholder for HUD
+
+# Changelog
+1. Added planets to show connections to sites via browser
