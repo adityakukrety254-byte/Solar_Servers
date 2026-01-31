@@ -78,7 +78,7 @@ class SolarServersCore:
         try:
             connections = ps.net_connections(kind="inet")
         except Exception:
-            return results  # Always safe fallback
+            return results
 
         for c in connections:
             if not c.pid or not c.raddr:
@@ -119,8 +119,6 @@ class SolarServersCore:
                 "domain": domain,
             }
 
-
-            # AI classification
             if self.ai:
                 try:
                     entry["is_threat"] = bool(np.array(self.ai.predict_threat(entry["ip"], entry["port"], "ESTABLISHED")).item())
@@ -158,4 +156,5 @@ if __name__ == "__main__":
     pkt = core.get_packet()
     print(f"\nFound {len(pkt['connections'])} connections")
     for c in pkt["connections"][:10]:
+
         print(f"{c['app']} -> {c['ip']}:{c['port']}")
