@@ -1,0 +1,258 @@
+import * as THREE from "three";
+import { OrbitControls } from "OrbitControls";
+
+let scene, camera, renderer, ws, sun, controls;
+const planets = {};
+const beams = {};          
+let tier = "LOW_END";      
+let maxPlanets = 100;
+
+function setTier(tier1) {
+    tier = tier1;
+    if (tier === "HIGH_END") {
+        maxPlanets = 200;
+    } else {
+        maxPlanets = 100;
+    }
+    const ids = Object.keys(planets);
+    if (ids.length <= maxPlanets) return;
+    for (let i = 0; i < (ids.length - maxPlanets); i++) {
+        removePlanet(ids[i]);
+    }
+    console.log(`Tier: ${tier}, maxPlanets = ${maxPlanets}`);
+
+}
+
+function initRenderer(tier) {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.002);
+    camera = new THREE.PerspectiveCamera(
+        70,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+    );
+   
+    camera.position.set(0, 40, 70);
+    camera.lookAt(0, 0, 0);
+    renderer = new THREE.WebGLRenderer({
+        antialias: tier !== "LOW_END",
+        powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = tier !== "LOW_END";
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+
+    document.body.appendChild(renderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.enablePan = false;
+    controls.minDistance = 20;
+    controls.maxDistance = 120;
+    controls.target.set(0, 0, 0);
+    controls.update();
+    const light = new THREE.PointLight(0xffffff, 1.2);
+    light.position.set(0, 0, 0);
+    scene.add(light);
+
+    scene.add(new THREE.AmbientLight(0x404040));
+
+    sunMesh();
+}
+
+function registerPlanet(id, mesh) {
+    planets[id] = mesh;
+    scene.add(mesh);
+}
+
+function removePlanet(id) {
+    const mesh = planets[id];
+    if (!mesh) return;
+
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+    delete planets[id];
+
+    if (beams[id]) {
+        scene.remove(beams[id]);
+        beams[id].geometry.dispose();
+        beams[id].material.dispose();
+        delete beams[id];
+    }
+}
+
+function sunMesh() {
+    const geometry = tier === "HIGH_END" ? new THREE.SphereGeometry(4 * 2, 32, 32) : new THREE.IcosahedronGeometry(4 * 2, 1);
+    const material = new THREE.MeshStandardMaterial({color: 0xffcc33, emissive: 0xffffaa, emissiveIntensity: 1.5});
+    sun = new THREE.Mesh(geometry, material);
+    sun.position.set(0, 0, 0);
+    scene.add(sun);
+    const sunLight = new THREE.PointLight(0xffffff, 2, 200);
+    sunLight.position.set(0, 0, 0);
+    sunLight.castShadow = tier !== "LOW_END";
+    scene.add(sunLight);
+}
+
+function createPlanetMesh(tier, isThreat) {
+    const geometry =
+        tier === "HIGH_END"
+            ? new THREE.SphereGeometry(1.5 * 2, 32, 32)
+            : new THREE.IcosahedronGeometry(1.2 * 2, 0);
+
+    const material = new THREE.MeshStandardMaterial({
+        color: isThreat ? 0xff3333 : 0x33ff99,
+        flatShading: tier === "LOW_END"
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = tier !== "LOW_END";
+    mesh.receiveShadow = tier !== "LOW_END";
+    mesh.position.set(0, 0, 0);
+    mesh.targetPosition = new THREE.Vector3();
+    mesh.orbitAngle = Math.random() * Math.PI * 2;
+    mesh.orbitSpeed = (0.01 + Math.random() * 0.02);
+
+    return mesh;
+}
+
+function computeOrbitPosition(conn, index) {
+    const planet = planets[conn.id];
+    if (!planet) return new THREE.Vector3();
+
+    const radius = 15 + (index % 10) * 3;
+    const yOffset = (index % 5) * 1.2;
+
+    planet.orbitAngle += planet.orbitSpeed;
+
+    return new THREE.Vector3(
+        Math.cos(planet.orbitAngle) * planet.orbitRadius,
+        yOffset,
+        Math.sin(planet.orbitAngle) * planet.orbitRadius
+    );
+}
+
+function createBeam(id, position, index) {
+    if (tier === "LOW_END" && Object.keys(planets).length > 50) return;
+
+    const offset = ((index % 5) - 2) * 0.5;
+    const points = [
+        new THREE.Vector3(0, offset, 0),
+        position
+    ];
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+        color: 0x4444ff,
+        transparent: true,
+        opacity: 0.3
+    });
+
+    const line = new THREE.Line(geometry, material);
+    beams[id] = line;
+    scene.add(line);
+}
+
+function updateFromPacket(packet) {
+    console.log("Backend tier:", packet.meta?.tier, "| Current tier:", tier);
+    if (packet.meta?.tier && packet.meta.tier !== tier) {
+        setTier(packet.meta.tier);
+    }
+
+    const seen = new Set();
+
+    packet.connections.forEach((conn, index) => {
+        const id = conn.id;
+        seen.add(id);
+        const radius = 40 + (index) * 5;
+
+        if (!planets[id]) {
+            if (Object.keys(planets).length >= maxPlanets) return;
+
+            const mesh = createPlanetMesh(tier, conn.is_threat);
+            mesh.orbitRadius = radius;
+            mesh.orbitAngle = Math.random() * Math.PI * 2; 
+            mesh.orbitSpeed = 0.2 / radius;
+            registerPlanet(id, mesh);
+        }
+
+        const targetPos = computeOrbitPosition(conn, index);
+        planets[id].targetPosition.copy(targetPos);
+
+        if (!beams[id]) {
+            createBeam(id, targetPos, index);
+        }
+    });
+
+    Object.keys(planets).forEach(id => {
+        if (!seen.has(id)) {
+            removePlanet(id);
+        }
+    });
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (sun) {
+        const scale = 1 + Math.sin(Date.now() * 0.002) * 0.03;
+        sun.scale.set(scale, scale, scale);
+    }
+
+    Object.values(planets).forEach(planet => {
+        planet.position.lerp(planet.targetPosition, 0.08);
+    });
+    Object.keys(beams).forEach(id => {
+        const beam = beams[id];
+        const planet = planets[id];
+        if (!planet) return;
+
+        const pos = planet.position;
+        beam.geometry.setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            pos
+        ]);
+    });
+
+    controls.update()
+
+    renderer.render(scene, camera);
+}
+
+function initWebSocket() {
+    ws = new WebSocket("ws://127.0.0.1:8000/ws");
+
+    ws.onopen = () => {
+        console.log("WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+        console.log("Packet received");
+        try {
+            const packet = JSON.parse(event.data);
+            updateFromPacket(packet);
+        } catch (e) {
+            console.error("Invalid packet", e);
+        }
+    };
+
+    ws.onclose = () => {
+        console.warn("WS closed, retrying");
+        setTimeout(initWebSocket, 2000);
+    };
+}
+
+setTier("LOW_END");
+initRenderer(tier);
+initWebSocket();
+animate();
+
+window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
