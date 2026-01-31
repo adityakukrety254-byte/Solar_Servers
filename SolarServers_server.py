@@ -1,3 +1,4 @@
+
 import asyncio
 import psutil
 from contextlib import asynccontextmanager
@@ -8,6 +9,8 @@ from SolarServers_core import SolarServersCore
 core = SolarServersCore()
 
 INTERVAL = 0.2
+
+last_packet = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,12 +35,13 @@ async def websocket_stream(ws: WebSocket):
     try:
         while True:
             try:
-                packet = core.get_packet()
-                await ws.send_json(packet)
-                print(f"Sent packet with {len(packet['connections'])} connections")
+                global last_packet
+                last_packet = core.get_packet()
+                await ws.send_json(last_packet)
+                print(f"Sent packet with {len(last_packet['connections'])} connections")
             except Exception as e:
                 print("Error scanning core:", e)
-                await ws.send_json({"meta": core.meta, "connections": []})
+                break
 
             await asyncio.sleep(INTERVAL)
     except WebSocketDisconnect:

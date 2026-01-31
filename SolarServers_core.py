@@ -4,6 +4,7 @@ import ctypes
 import platform
 from typing import List, Dict
 import numpy as np
+import socket
 
 IGNORE_APPS = [
     'svchost.exe','system','searchhost.exe','runtimebroker.exe',
@@ -13,6 +14,14 @@ IGNORE_APPS = [
     'backgroundtaskhost.exe','systemsettings.exe','settingsynchost.exe',
     'microsoftedgeupdate.exe','windowsupdatebox.exe',
     'msmpeng.exe','nissrv.exe','securityhealthservice.exe'
+]
+
+BROWSERS = [
+    "chrome.exe",
+    "firefox.exe",
+    "msedge.exe",
+    "brave.exe",
+    "opera.exe"
 ]
 
 try:
@@ -90,12 +99,24 @@ class SolarServersCore:
             if app_name.lower() in [i.lower() for i in IGNORE_APPS]:
                 continue
 
+            isBrowser = app_name.lower() in BROWSERS
+            domain = None;
+
+            if isBrowser:
+                domain = self._resolve_domain(c.raddr.ip)
+
             entry = {
-                "id": str(f"{app_name}_{c.pid}"),
+                "id": (
+                    f"{app_name}:{domain}"
+                    if isBrowser and domain
+                    else f"{app_name}_{c.pid}"
+                ),
                 "app": str(app_name),
                 "pid": int(c.pid),
                 "ip": str(c.raddr.ip) if c.raddr and c.raddr.ip else "0.0.0.0",
                 "port": int(c.raddr.port) if c.raddr and c.raddr.port else 0,
+                "type": "browser" if isBrowser else "process",
+                "domain": domain,
             }
 
 
@@ -108,9 +129,21 @@ class SolarServersCore:
             else:
                 entry["is_threat"] = False
 
+            if entry.get("type") == "browser":
+                entry["risk_weight"] = 0.5
+            else:
+                entry["risk_weight"] = 1.0
+
             results.append(entry)
 
         return results
+    
+    def _resolve_domain(self, ip: str) -> str:
+        try:
+            return socket.gethostbyaddr(ip)[0]
+        except Exception:
+            return ip
+
     def get_packet(self) -> Dict:
         return {
             "meta": {
