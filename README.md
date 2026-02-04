@@ -9,6 +9,7 @@ How to test:
 # "uvicorn backend:app"
 5.Backend runs on: # "http://127.0.0.1:8000/docs"
 6. In browser, specifically go to
+<br>
 # "http://localhost:8000 or http://localhost:8000/"
 7. DO NOT directly open index.html.
 
