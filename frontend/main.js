@@ -1,14 +1,13 @@
 import * as THREE from "three";
 import { OrbitControls } from "OrbitControls";
 
-let scene, camera, renderer, ws, sun, controls, raycaster, mouse, tooltip, selectPlanet = null, hoveredPlanet = null;
+let scene, camera, renderer, ws, sun, controls, raycaster, mouse, selectPlanet = null, hoveredPlanet = null;
 const planets = {};
 const beams = {};          
 let tier = "LOW_END";      
 let maxPlanets = 100;
 
 function setTier(tier1) {
-    tier = tier1;
     if (tier === "HIGH_END") {
         maxPlanets = 200;
     } else {
@@ -377,3 +376,4 @@ window.addEventListener("resize", () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
