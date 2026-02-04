@@ -5,9 +5,12 @@ How to test:
 # "uvicorn SolarServers_server:app --port 8000"
 3. Inside frontend, open terminal and run
 # "python -m http.server 8000"
-4. In browser, specifically go to
+4.Inside backend.py ,open terminal and run
+# "uvicorn backend:app"
+5.Backend runs on: # "http://127.0.0.1:8000/docs"
+6. In browser, specifically go to
 # "http://localhost:8000 or http://localhost:8000/"
-5. DO NOT directly open index.html.
+7. DO NOT directly open index.html.
 
 > On top left, a small green square will appear. It is the placeholder for HUD
 
